@@ -5,13 +5,13 @@ export default auth((req) => {
   const isLoggedIn = !!req.auth
 
   const isAuthPage = nextUrl.pathname.startsWith("/login")
-  const isProtectedRoute = nextUrl.pathname.startsWith("/dashboard") || 
+  const isProtectedRoute = nextUrl.pathname.startsWith("/") || 
                           nextUrl.pathname === "/" ||
                           nextUrl.pathname.startsWith("/admin")
 
   if (isAuthPage) {
     if (isLoggedIn) {
-      return Response.redirect(new URL("/dashboard", nextUrl))
+      return Response.redirect(new URL("/", nextUrl))
     }
     return null
   }
@@ -21,7 +21,7 @@ export default auth((req) => {
   }
 
   // Redirect /dashboard to /dashboard (core route)
-  if (nextUrl.pathname === "/dashboard" && isLoggedIn) {
+  if (nextUrl.pathname === "/" && isLoggedIn) {
     return null // Allow access to /dashboard
   }
 

@@ -41,7 +41,7 @@ export function LoginForm({
       if (result?.error) {
         setError("Invalid credentials. Please try again.")
       } else {
-        router.push("/dashboard")
+        router.push("/")
         router.refresh()
       }
     } catch (error) {
@@ -85,18 +85,10 @@ export function LoginForm({
           )}
         </div>
         <div className="grid gap-3">
-          <div className="flex items-center">
-            <Label htmlFor="password">Password</Label>
-            <a
-              href="#"
-              className="ml-auto text-sm underline-offset-4 hover:underline"
-            >
-              Forgot your password?
-            </a>
-          </div>
-          <Input 
-            id="password" 
-            type="password" 
+          <Label htmlFor="password">Password</Label>
+          <Input
+            id="password"
+            type="password"
             disabled={isLoading}
             {...register("password")}
           />
@@ -104,19 +96,13 @@ export function LoginForm({
             <p className="text-sm text-red-600">{errors.password.message}</p>
           )}
         </div>
-        <Button 
-          type="submit" 
+        <Button
+          type="submit"
           className="w-full cursor-pointer bg-blue-800 hover:bg-blue-900"
           disabled={isLoading}
         >
           {isLoading ? "Signing in..." : "Login"}
         </Button>
-      </div>
-      <div className="text-center text-sm">
-        Don&apos;t have an account?{" "}
-        <a href="#" className="underline underline-offset-4">
-          Sign up
-        </a>
       </div>
     </form>
   )

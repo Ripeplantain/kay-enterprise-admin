@@ -42,7 +42,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         try {
-          const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8001/api/"
+          const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/"
           const response = await fetch(`${baseUrl}auth/admin/login/`, {
             method: "POST",
             headers: {
@@ -84,11 +84,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   callbacks: {
     async jwt({ token, user }) {
+      // Initial sign in
       if (user) {
         token.role = user.role
         token.accessToken = user.accessToken
         token.refreshToken = user.refreshToken
+        return token
       }
+
+      // Just return the existing token - no automatic refresh
       return token
     },
     async session({ session, token }) {
