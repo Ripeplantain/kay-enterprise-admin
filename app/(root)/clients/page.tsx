@@ -47,7 +47,7 @@ export default function ClientsList() {
       setStats(response.stats);
     } catch (err) {
       console.error("Error fetching stats:", err);
-      // Don't show error toast for stats, it's not critical
+      toast.error("Failed to load statistics");
     }
   }, [session?.user?.id]);
 

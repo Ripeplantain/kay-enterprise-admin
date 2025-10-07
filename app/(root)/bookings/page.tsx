@@ -6,7 +6,7 @@ import toast from "react-hot-toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Pagination } from "@/components/ui/pagination"
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table"
 import {
   TicketCheck,
   Plus,
@@ -15,18 +15,17 @@ import {
   Clock,
   User,
   CreditCard,
-  MoreHorizontal,
   Eye,
   Download,
-  X
+  X,
+  Trash2
 } from "lucide-react"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Loader } from "@/components/ui/loader"
 import { SearchFilter, ConfirmationModal } from "@/components/widgets/common"
-import { bookingService } from "@/services/booking"
+import { bookingService } from "@/services/bookings"
 import { Booking, BookingCreateData } from "@/lib/types"
 import BookingForm from "@/components/bookings/booking-form"
-
 
 export default function BookingsList() {
   const { data: session, status } = useSession()
@@ -35,12 +34,11 @@ export default function BookingsList() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-  const [totalItems, setTotalItems] = useState(0)
-  const [itemsPerPage] = useState(10)
+  const [totalCount, setTotalCount] = useState(0)
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
   const [cancelModal, setCancelModal] = useState<{
     isOpen: boolean
     booking: Booking | null
@@ -51,8 +49,18 @@ export default function BookingsList() {
     isCancelling: false
   })
 
+  const [deleteModal, setDeleteModal] = useState<{
+    isOpen: boolean
+    booking: Booking | null
+    isDeleting: boolean
+  }>({
+    isOpen: false,
+    booking: null,
+    isDeleting: false
+  })
+
   const fetchBookings = useCallback(
-    async (page: number, search?: string, status?: string, showToast: boolean = true) => {
+    async (page: number, showToast: boolean = true) => {
       if (!session?.user?.id) {
         if (showToast)
           toast.error("Authentication required. Please log in again.")
@@ -67,20 +75,21 @@ export default function BookingsList() {
       try {
         setLoading(true)
 
-        const response = await bookingService.getBookings(
+        const filters = {
           page,
-          search || undefined,
-          status || undefined
-        )
+          search: searchTerm || undefined,
+          status: statusFilter || undefined,
+        }
+
+        const response = await bookingService.getBookings(filters)
 
         setBookings(response.results)
-        setTotalItems(response.count)
-        setTotalPages(Math.ceil(response.count / itemsPerPage))
+        setTotalCount(response.count)
 
         if (showToast && loadingToast) {
-          if (search) {
+          if (searchTerm || statusFilter) {
             toast.success(
-              `Found ${response.results.length} bookings matching "${search}"`,
+              `Found ${response.results.length} bookings`,
               { id: loadingToast }
             )
           } else {
@@ -89,10 +98,14 @@ export default function BookingsList() {
             })
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error fetching bookings:", err)
         if (showToast && loadingToast) {
-          toast.error("Failed to load bookings. Please try again.", {
+          const errorMessage = err?.response?.data?.message ||
+                              err?.response?.data?.error ||
+                              err?.message ||
+                              "Failed to load bookings. Please try again."
+          toast.error(errorMessage, {
             id: loadingToast,
           })
         }
@@ -100,46 +113,42 @@ export default function BookingsList() {
         setLoading(false)
       }
     },
-    [itemsPerPage, session?.user?.id]
+    [session?.user?.id, searchTerm, statusFilter]
   )
 
   // Initial load only
   useEffect(() => {
-    if (status === "loading") {
-      return
-    }
+    if (status === "loading") return
+    if (status === "unauthenticated") return
 
-    if (status === "unauthenticated") {
-      return
-    }
-
-    if (
-      status === "authenticated" &&
-      session?.user?.id &&
-      bookings.length === 0
-    ) {
-      fetchBookings(1, "", "", false)
+    if (status === "authenticated" && session?.user?.id && bookings.length === 0) {
+      fetchBookings(1, false)
     }
   }, [status, session?.user?.id, bookings.length, fetchBookings])
 
   // Page changes
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
-    fetchBookings(page, searchTerm, statusFilter, false)
+    fetchBookings(page, false)
   }
 
   // Manual search
   const handleSearch = () => {
     setCurrentPage(1)
-    fetchBookings(1, searchTerm, statusFilter, true)
+    fetchBookings(1, true)
   }
 
   // Handle filter change
   const handleFilterChange = (newStatus: string) => {
     setStatusFilter(newStatus)
     setCurrentPage(1)
-    fetchBookings(1, searchTerm, newStatus, true)
   }
+
+  useEffect(() => {
+    if (statusFilter !== "") {
+      fetchBookings(1, true)
+    }
+  }, [statusFilter, fetchBookings])
 
   // Reset search
   const handleReset = () => {
@@ -156,7 +165,36 @@ export default function BookingsList() {
       },
     })
 
-    fetchBookings(1, "", "", false)
+    fetchBookings(1, false)
+  }
+
+  const handleFormSubmit = async (formData: BookingCreateData) => {
+    setSubmitting(true)
+    const isEditing = !!editingBooking
+
+    try {
+      if (isEditing) {
+        await bookingService.updateBooking(editingBooking.id, formData)
+        toast.success("Booking updated successfully")
+        setEditingBooking(null)
+      } else {
+        await bookingService.createBooking(formData)
+        toast.success("Booking created successfully")
+      }
+
+      setShowCreateForm(false)
+      // Refresh the bookings list
+      await fetchBookings(currentPage, false)
+    } catch (error: any) {
+      console.error("Failed to save booking:", error)
+      const errorMessage = error?.response?.data?.message ||
+                          error?.response?.data?.error ||
+                          error?.message ||
+                          `Failed to ${isEditing ? "update" : "create"} booking. Please try again.`
+      toast.error(errorMessage)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleCancelClick = (booking: Booking) => {
@@ -174,13 +212,18 @@ export default function BookingsList() {
 
     try {
       await bookingService.cancelBooking(cancelModal.booking.id)
-      setBookings(prev => prev.filter(b => b.id !== cancelModal.booking!.id))
-      setTotalItems(prev => prev - 1)
       toast.success(`Booking ${cancelModal.booking.reference_id} cancelled successfully`)
       setCancelModal({ isOpen: false, booking: null, isCancelling: false })
-    } catch (error) {
+
+      // Refresh the bookings list
+      await fetchBookings(currentPage, false)
+    } catch (error: any) {
       console.error("Failed to cancel booking:", error)
-      toast.error("Failed to cancel booking. Please try again.")
+      const errorMessage = error?.response?.data?.message ||
+                          error?.response?.data?.error ||
+                          error?.message ||
+                          "Failed to cancel booking. Please try again."
+      toast.error(errorMessage)
       setCancelModal(prev => ({ ...prev, isCancelling: false }))
     }
   }
@@ -191,34 +234,40 @@ export default function BookingsList() {
     }
   }
 
-  const handleFormSubmit = async (formData: BookingCreateData) => {
-    setSubmitting(true)
+  const handleDeleteClick = (booking: Booking) => {
+    setDeleteModal({
+      isOpen: true,
+      booking,
+      isDeleting: false
+    })
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteModal.booking) return
+
+    setDeleteModal(prev => ({ ...prev, isDeleting: true }))
 
     try {
-      if (editingBooking) {
-        const response = await bookingService.updateBooking(editingBooking.id, formData)
-        if (response.success) {
-          setBookings(prev => prev.map(booking =>
-            booking.id === editingBooking.id ? response.booking : booking
-          ))
-          setEditingBooking(null)
-          setShowCreateForm(false)
-          toast.success("Booking updated successfully")
-        }
-      } else {
-        const response = await bookingService.createBooking(formData)
-        if (response.success) {
-          setBookings(prev => [...prev, response.booking])
-          setTotalItems(prev => prev + 1)
-          setShowCreateForm(false)
-          toast.success("Booking created successfully")
-        }
-      }
-    } catch (error) {
-      console.error("Failed to save booking:", error)
-      toast.error("Failed to save booking. Please try again.")
-    } finally {
-      setSubmitting(false)
+      await bookingService.deleteBooking(deleteModal.booking.id)
+      toast.success(`Booking ${deleteModal.booking.reference_id} deleted successfully`)
+      setDeleteModal({ isOpen: false, booking: null, isDeleting: false })
+
+      // Refresh the bookings list
+      await fetchBookings(currentPage, false)
+    } catch (error: any) {
+      console.error("Failed to delete booking:", error)
+      const errorMessage = error?.response?.data?.message ||
+                          error?.response?.data?.error ||
+                          error?.message ||
+                          "Failed to delete booking. Please try again."
+      toast.error(errorMessage)
+      setDeleteModal(prev => ({ ...prev, isDeleting: false }))
+    }
+  }
+
+  const handleDeleteClose = () => {
+    if (!deleteModal.isDeleting) {
+      setDeleteModal({ isOpen: false, booking: null, isDeleting: false })
     }
   }
 
@@ -234,17 +283,14 @@ export default function BookingsList() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "confirmed": return "bg-green-100 text-green-700"
-      case "pending": return "bg-yellow-100 text-yellow-700"
-      case "cancelled": return "bg-red-100 text-red-700"
-      default: return "bg-gray-100 text-gray-700"
+      case "confirmed": return "default"
+      case "pending": return "outline"
+      case "cancelled": return "destructive"
+      default: return "outline"
     }
   }
 
-  const showingStart = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1
-  const showingEnd = Math.min(currentPage * itemsPerPage, totalItems)
-
-  const totalBookings = totalItems
+  const totalBookings = totalCount
   const confirmedBookings = bookings?.filter(b => b.status === "confirmed").length || 0
   const pendingBookings = bookings?.filter(b => b.status === "pending").length || 0
   const totalRevenue = bookings?.reduce((sum, b) => sum + parseFloat(b.total_amount), 0) || 0
@@ -285,9 +331,6 @@ export default function BookingsList() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-gray-900">{totalBookings}</div>
-            <p className="text-xs text-green-600 mt-1">
-              +8% from last week
-            </p>
           </CardContent>
         </Card>
 
@@ -300,9 +343,6 @@ export default function BookingsList() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-gray-900">{confirmedBookings}</div>
-            <p className="text-xs text-blue-600 mt-1">
-              {((confirmedBookings/totalBookings) * 100).toFixed(0)}% confirm rate
-            </p>
           </CardContent>
         </Card>
 
@@ -315,9 +355,6 @@ export default function BookingsList() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-gray-900">{pendingBookings}</div>
-            <p className="text-xs text-yellow-600 mt-1">
-              Needs attention
-            </p>
           </CardContent>
         </Card>
 
@@ -330,14 +367,11 @@ export default function BookingsList() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-gray-900">GHS {totalRevenue.toFixed(2)}</div>
-            <p className="text-xs text-green-600 mt-1">
-              From paid bookings
-            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Search */}
+      {/* Search & Filters */}
       <SearchFilter
         searchTerm={searchTerm}
         onSearchTermChange={setSearchTerm}
@@ -359,7 +393,7 @@ export default function BookingsList() {
         }
       />
 
-      {/* Bookings List */}
+      {/* Bookings Table */}
       <Card>
         <CardHeader>
           <CardTitle>All Bookings</CardTitle>
@@ -379,102 +413,108 @@ export default function BookingsList() {
             />
           ) : (
             <>
-              <div className="space-y-4">
-                {bookings.map((booking) => (
-                  <div
-                    key={booking.id}
-                    className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                        <TicketCheck className="w-6 h-6 text-blue-600" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-4 mb-2">
-                          <h3 className="font-semibold text-gray-900">{booking.reference_id}</h3>
-                          <Badge className={getStatusColor(booking.status)}>
-                            {booking.status_display}
-                          </Badge>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Reference ID</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Route</TableHead>
+                    <TableHead>Travel Date</TableHead>
+                    <TableHead>Seat</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {bookings.map((booking) => (
+                    <TableRow key={booking.id}>
+                      <TableCell className="font-medium">{booking.reference_id}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <User className="w-4 h-4 text-gray-400" />
+                          {booking.user_details.full_name}
                         </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-gray-500">
-                          <div className="flex items-center gap-1">
-                            <User className="w-3 h-3" />
-                            {booking.user_details.full_name}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <MapPin className="w-3 h-3" />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{booking.route_name}</span>
+                          <span className="text-xs text-gray-500">
                             {booking.departure_terminal} → {booking.destination_terminal}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            {new Date(booking.travel_date).toLocaleDateString()}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {booking.departure_time}
-                          </div>
+                          </span>
                         </div>
-
-                        <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-                          <span>Seat: {booking.seat_number}</span>
-                          <span>Bus: {booking.plate_number}</span>
-                          <span>Route: {booking.route_name}</span>
-                          <span>Booked: {new Date(booking.booking_date).toLocaleDateString()}</span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-gray-400" />
+                          {new Date(booking.travel_date).toLocaleDateString()}
                         </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <div className="text-lg font-semibold text-gray-900">
-                          GHS {booking.total_amount}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {booking.departure_time} - {booking.arrival_time}
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button variant="ghost" size="sm" title="View Details">
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        {booking.status !== "cancelled" && (
+                      </TableCell>
+                      <TableCell>{booking.seat_number}</TableCell>
+                      <TableCell className="font-semibold">GHS {booking.total_amount}</TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusColor(booking.status)}>
+                          {booking.status_display}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="sm" title="View Details">
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          {booking.status !== "cancelled" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Cancel Booking"
+                              onClick={() => handleCancelClick(booking)}
+                              className="text-orange-600 hover:text-orange-800"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
-                            title="Cancel Booking"
-                            onClick={() => handleCancelClick(booking)}
+                            title="Delete Booking"
+                            onClick={() => handleDeleteClick(booking)}
                             className="text-red-600 hover:text-red-800"
                           >
-                            <X className="w-4 h-4" />
+                            <Trash2 className="w-4 h-4" />
                           </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          title="Edit Booking"
-                          onClick={() => startEdit(booking)}
-                        >
-                          <MoreHorizontal className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
 
               {/* Pagination */}
-              <div className="mt-6">
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  totalItems={totalItems}
-                  itemsPerPage={itemsPerPage}
-                  onPageChange={handlePageChange}
-                  showingStart={showingStart}
-                  showingEnd={showingEnd}
-                />
-              </div>
+              {totalCount > 10 && (
+                <div className="flex items-center justify-between mt-6">
+                  <p className="text-sm text-gray-600">
+                    Showing {((currentPage - 1) * 10) + 1} to {Math.min(currentPage * 10, totalCount)} of {totalCount} bookings
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage * 10 >= totalCount}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </CardContent>
@@ -503,8 +543,25 @@ export default function BookingsList() {
         }
         confirmText="Cancel Booking"
         cancelText="Keep Booking"
-        variant="danger"
+        variant="warning"
         isLoading={cancelModal.isCancelling}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={deleteModal.isOpen}
+        onClose={handleDeleteClose}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Booking"
+        message={
+          deleteModal.booking
+            ? `Are you sure you want to permanently delete booking "${deleteModal.booking.reference_id}"? This action cannot be undone.`
+            : "Are you sure you want to delete this booking?"
+        }
+        confirmText="Delete Booking"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={deleteModal.isDeleting}
       />
     </div>
   )

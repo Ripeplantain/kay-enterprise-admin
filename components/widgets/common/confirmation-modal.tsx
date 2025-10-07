@@ -73,8 +73,8 @@ export function ConfirmationModal({
   }
 
   return (
-    <button
-      type="button"
+    <div
+      role="dialog"
       aria-label="Confirmation Modal"
       className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50"
       onClick={handleBackdropClick}
@@ -127,6 +127,6 @@ export function ConfirmationModal({
           </div>
         </CardContent>
       </Card>
-    </button>
+    </div>
   )
 }

@@ -3,6 +3,7 @@
 import { useSession } from "next-auth/react"
 import { useEffect, useState } from "react"
 import { BarChart3, Users, Calendar, DollarSign } from "lucide-react"
+import toast from "react-hot-toast"
 import { StatCard } from "@/components/dashboard/stat-card"
 import { StatusCard } from "@/components/dashboard/status-card"
 import { clientService } from "@/services"
@@ -22,7 +23,9 @@ export default function Dashboard() {
         const response = await clientService.getStats()
         setStats(response.stats)
       } catch (err) {
-        setError('Failed to load dashboard statistics')
+        const errorMessage = 'Failed to load dashboard statistics'
+        setError(errorMessage)
+        toast.error(errorMessage)
         console.error('Failed to fetch stats:', err)
       } finally {
         setLoading(false)

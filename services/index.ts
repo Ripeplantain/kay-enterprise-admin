@@ -1,3 +1,6 @@
 export { authService } from './auth'
 export { clientService } from './client'
 export { busService } from './bus'
+export { routeService } from './routes'
+export { tripService } from './trips'
+export { bookingService } from './bookings'

@@ -7,14 +7,11 @@ import Link from "next/link"
 import {
   LayoutDashboard,
   Users,
-  Settings,
-  BarChart3,
   Package,
   LogOut,
   User,
   Bus,
   Route,
-  MapPin,
   Calendar,
   CreditCard,
   Luggage,
@@ -141,20 +138,6 @@ export default function CoreLayout({ children }: CoreLayoutProps) {
                 Buses
               </Link>
             </li>
-            <li>
-              <Link
-                href="/terminals"
-                onClick={handleLinkClick}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                  isActive("/terminals")
-                    ? "bg-blue-600 text-white"
-                    : "text-slate-300 hover:bg-slate-700 hover:text-white"
-                }`}
-              >
-                <MapPin className="w-4 h-4" />
-                Terminals
-              </Link>
-            </li>
 
             {/* Route & Trip Management */}
             <li>
@@ -232,42 +215,6 @@ export default function CoreLayout({ children }: CoreLayoutProps) {
                 <Luggage className="w-4 h-4" />
                 Luggage
               </Link>
-            </li>
-
-            {/* Analytics */}
-            <li>
-              <button
-                onClick={handleLinkClick}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
-              >
-                <BarChart3 className="w-4 h-4" />
-                Analytics
-              </button>
-            </li>
-
-            {/* Settings */}
-            <li>
-              <Link
-                href="/profile"
-                onClick={handleLinkClick}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                  isActive("/profile")
-                    ? "bg-blue-600 text-white"
-                    : "text-slate-300 hover:bg-slate-700 hover:text-white"
-                }`}
-              >
-                <User className="w-4 h-4" />
-                Profile
-              </Link>
-            </li>
-            <li>
-              <button
-                onClick={handleLinkClick}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
-              >
-                <Settings className="w-4 h-4" />
-                Settings
-              </button>
             </li>
           </ul>
         </nav>

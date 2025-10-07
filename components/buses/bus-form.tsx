@@ -4,16 +4,12 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { type Bus } from "@/lib/types"
-
 interface BusFormData {
   plate_number: string
   bus_type: string
-  total_seats: number
 }
 
 interface BusFormProps {
-  bus?: Bus | null
   onSubmit: (data: BusFormData) => Promise<void>
   onCancel: () => void
   submitting?: boolean
@@ -21,11 +17,10 @@ interface BusFormProps {
 
 const busTypes = ["vip", "express"]
 
-export default function BusForm({ bus, onSubmit, onCancel, submitting = false }: BusFormProps) {
+export default function BusForm({ onSubmit, onCancel, submitting = false }: BusFormProps) {
   const [formData, setFormData] = useState<BusFormData>({
-    plate_number: bus?.plate_number || "",
-    bus_type: bus?.bus_type || "",
-    total_seats: bus?.total_seats || 30,
+    plate_number: "",
+    bus_type: "",
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -36,7 +31,7 @@ export default function BusForm({ bus, onSubmit, onCancel, submitting = false }:
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{bus ? "Edit Bus" : "Create New Bus"}</CardTitle>
+        <CardTitle>Create New Bus</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -64,25 +59,13 @@ export default function BusForm({ bus, onSubmit, onCancel, submitting = false }:
                 ))}
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Total Seats</label>
-              <Input
-                type="number"
-                value={formData.total_seats}
-                onChange={(e) => setFormData(prev => ({ ...prev, total_seats: parseInt(e.target.value) || 30 }))}
-                required
-                min="15"
-                max="60"
-                placeholder="Enter total seats"
-              />
-            </div>
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={onCancel}>
               Cancel
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? "Saving..." : bus ? "Update Bus" : "Create Bus"}
+              {submitting ? "Creating..." : "Create Bus"}
             </Button>
           </div>
         </form>

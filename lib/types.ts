@@ -141,9 +141,123 @@ export interface BookingsResponse {
 }
 
 export interface BookingCreateData {
-  trip_id: string
-  user: string
-  seat_number: string
-  ticket_price: number
-  booking_fee: number
+  trip_id: number
+  seat_ids: number[]
+  pickup_point_id: string
+  drop_point_id: string
+}
+
+export interface BookingUpdateData {
+  status?: 'confirmed' | 'pending' | 'cancelled'
+  trip_id?: number
+  seat_ids?: number[]
+  pickup_point_id?: string
+  drop_point_id?: string
+}
+
+export interface Route {
+  id: number
+  name: string
+  origin: string
+  destination: string
+  distance_km: number
+  estimated_duration_hours: number
+  is_active: boolean
+  created_at?: string
+  updated_at?: string
+}
+
+export interface RoutesResponse {
+  count: number
+  next: string | null
+  previous: string | null
+  results: Route[]
+}
+
+export interface RouteCreateData {
+  name: string
+  origin: string
+  destination: string
+  distance_km: number
+  estimated_duration_hours: number
+  is_active: boolean
+}
+
+export interface RouteUpdateData {
+  name?: string
+  origin?: string
+  destination?: string
+  distance_km?: number
+  estimated_duration_hours?: number
+  is_active?: boolean
+}
+
+export interface PickupPoint {
+  id?: number
+  name: string
+  time: string
+}
+
+export interface DropPoint {
+  id?: number
+  name: string
+  time: string
+}
+
+export interface Trip {
+  id: number
+  route?: number
+  route_name: string
+  origin: string
+  destination: string
+  bus?: number
+  bus_plate: string
+  bus_type: string
+  departure_datetime: string
+  arrival_datetime: string
+  price_per_seat: string | number
+  available_seats: number
+  status: 'scheduled' | 'boarding' | 'in_transit' | 'cancelled' | 'completed'
+  pickup_points: PickupPoint[]
+  drop_points: DropPoint[]
+  created_at?: string
+  updated_at?: string
+}
+
+export interface TripsResponse {
+  count: number
+  next: string | null
+  previous: string | null
+  results: Trip[]
+}
+
+export interface TripCreateData {
+  route: number
+  bus: number
+  departure_datetime: string
+  arrival_datetime: string
+  price_per_seat: number
+  available_seats: number
+  status: 'scheduled' | 'boarding' | 'in_transit' | 'cancelled' | 'completed'
+  pickup_points: PickupPoint[]
+  drop_points: DropPoint[]
+}
+
+export interface TripUpdateData {
+  route?: number
+  bus?: number
+  departure_datetime?: string
+  arrival_datetime?: string
+  price_per_seat?: number
+  available_seats?: number
+  status?: 'scheduled' | 'boarding' | 'departed' | 'cancelled' | 'completed'
+  pickup_points?: PickupPoint[]
+  drop_points?: DropPoint[]
+}
+
+export interface TripSeatsResponse {
+  success: boolean
+  message: string
+  trip_id: number
+  seats: Seat[]
 }

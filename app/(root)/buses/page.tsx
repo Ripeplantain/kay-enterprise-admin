@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useSession } from "next-auth/react"
-import { Plus, Edit, Trash2, Settings } from "lucide-react"
+import { Plus, Trash2, Bus as BusIcon, CheckCircle2, Armchair, CircleCheck } from "lucide-react"
 import toast from "react-hot-toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
@@ -16,7 +16,6 @@ import BusForm from "@/components/buses/bus-form"
 interface BusFormData {
   plate_number: string
   bus_type: string
-  total_seats: number
 }
 
 export default function BusesPage() {
@@ -26,7 +25,6 @@ export default function BusesPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterType, setFilterType] = useState("")
   const [showCreateForm, setShowCreateForm] = useState(false)
-  const [editingBus, setEditingBus] = useState<Bus | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [submitting, setSubmitting] = useState(false)
@@ -77,10 +75,14 @@ export default function BusesPage() {
             });
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error fetching buses:", err);
         if (showToast && loadingToast) {
-          toast.error("Failed to load buses. Please try again.", {
+          const errorMessage = err?.response?.data?.message ||
+                              err?.response?.data?.error ||
+                              err?.message ||
+                              "Failed to load buses. Please try again."
+          toast.error(errorMessage, {
             id: loadingToast,
           });
         }
@@ -141,25 +143,20 @@ export default function BusesPage() {
     setSubmitting(true)
 
     try {
-      if (editingBus) {
-        const response = await busService.updateBus(String(editingBus.id), formData)
-        if (response.success) {
-          setBuses(prev => prev.map(bus =>
-            bus.id === editingBus.id ? response.bus : bus
-          ))
-          setEditingBus(null)
-          setShowCreateForm(false)
-        }
-      } else {
-        const response = await busService.createBus(formData)
-        if (response.success) {
-          setBuses(prev => [...prev, response.bus])
-          setTotalCount(prev => prev + 1)
-          setShowCreateForm(false)
-        }
+      const response = await busService.createBus(formData)
+      if (response.success) {
+        toast.success("Bus created successfully")
+        setShowCreateForm(false)
+        // Refetch buses to get updated list
+        await fetchBuses(currentPage, searchTerm, filterType, false)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save bus:", error)
+      const errorMessage = error?.response?.data?.message ||
+                          error?.response?.data?.error ||
+                          error?.message ||
+                          "Failed to create bus. Please try again."
+      toast.error(errorMessage)
     } finally {
       setSubmitting(false)
     }
@@ -180,13 +177,17 @@ export default function BusesPage() {
 
     try {
       await busService.deleteBus(deleteModal.bus.id.toString())
-      setBuses(prev => prev.filter(b => b.id !== deleteModal.bus!.id))
-      setTotalCount(prev => prev - 1)
       toast.success(`Bus ${deleteModal.bus.plate_number} deleted successfully`)
       setDeleteModal({ isOpen: false, bus: null, isDeleting: false })
-    } catch (error) {
+      // Refetch buses to get updated list
+      await fetchBuses(currentPage, searchTerm, filterType, false)
+    } catch (error: any) {
       console.error("Failed to delete bus:", error)
-      toast.error("Failed to delete bus. Please try again.")
+      const errorMessage = error?.response?.data?.message ||
+                          error?.response?.data?.error ||
+                          error?.message ||
+                          "Failed to delete bus. Please try again."
+      toast.error(errorMessage)
       setDeleteModal(prev => ({ ...prev, isDeleting: false }))
     }
   }
@@ -197,13 +198,7 @@ export default function BusesPage() {
     }
   }
 
-  const startEdit = (bus: Bus) => {
-    setEditingBus(bus)
-    setShowCreateForm(true)
-  }
-
   const cancelForm = () => {
-    setEditingBus(null)
     setShowCreateForm(false)
   }
 
@@ -232,7 +227,7 @@ export default function BusesPage() {
                 <p className="text-sm font-medium text-gray-600">Total Buses</p>
                 <p className="text-2xl font-bold">{totalCount}</p>
               </div>
-              <Settings className="w-8 h-8 text-gray-400" />
+              <BusIcon className="w-8 h-8 text-gray-400" />
             </div>
           </CardContent>
         </Card>
@@ -245,7 +240,7 @@ export default function BusesPage() {
                   {buses.length}
                 </p>
               </div>
-              <Settings className="w-8 h-8 text-green-400" />
+              <CheckCircle2 className="w-8 h-8 text-green-400" />
             </div>
           </CardContent>
         </Card>
@@ -254,11 +249,11 @@ export default function BusesPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Seats</p>
-                <p className="text-2xl font-bold text-red-600">
+                <p className="text-2xl font-bold text-orange-600">
                   {buses.reduce((acc, bus) => acc + bus.total_seats, 0)}
                 </p>
               </div>
-              <Settings className="w-8 h-8 text-red-400" />
+              <Armchair className="w-8 h-8 text-orange-400" />
             </div>
           </CardContent>
         </Card>
@@ -267,11 +262,11 @@ export default function BusesPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Available Seats</p>
-                <p className="text-2xl font-bold">
+                <p className="text-2xl font-bold text-blue-600">
                   {buses.reduce((acc, bus) => acc + bus.seats.filter(s => s.is_available).length, 0)}
                 </p>
               </div>
-              <Settings className="w-8 h-8 text-blue-400" />
+              <CircleCheck className="w-8 h-8 text-blue-400" />
             </div>
           </CardContent>
         </Card>
@@ -299,10 +294,9 @@ export default function BusesPage() {
         }
       />
 
-      {/* Create/Edit Form */}
+      {/* Create Form */}
       {showCreateForm && (
         <BusForm
-          bus={editingBus}
           onSubmit={handleFormSubmit}
           onCancel={cancelForm}
           submitting={submitting}
@@ -359,23 +353,14 @@ export default function BusesPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => startEdit(bus)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteClick(bus)}
-                          className="text-red-600 hover:text-red-800"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteClick(bus)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
