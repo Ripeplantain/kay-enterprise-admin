@@ -4,11 +4,13 @@ import { useState, useEffect, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { Plus, Trash2, Bus as BusIcon, CheckCircle2, Armchair, CircleCheck } from "lucide-react"
 import toast from "react-hot-toast"
+import { useApiError } from "@/hooks/use-api-error"
 import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table"
 import { SearchFilter, ConfirmationModal } from "@/components/widgets/common"
+import { Pagination } from "@/components/ui/pagination"
 import { busService } from "@/services"
 import { Bus } from "@/lib/types"
 import BusForm from "@/components/buses/bus-form"
@@ -20,6 +22,7 @@ interface BusFormData {
 
 export default function BusesPage() {
   const { data: session } = useSession()
+  const { handleError } = useApiError()
   const [buses, setBuses] = useState<Bus[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
@@ -75,22 +78,19 @@ export default function BusesPage() {
             });
           }
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error("Error fetching buses:", err);
         if (showToast && loadingToast) {
-          const errorMessage = err?.response?.data?.message ||
-                              err?.response?.data?.error ||
-                              err?.message ||
-                              "Failed to load buses. Please try again."
-          toast.error(errorMessage, {
-            id: loadingToast,
-          });
+          toast.dismiss(loadingToast);
+        }
+        if (showToast) {
+          handleError(err, "Failed to load buses. Please try again.");
         }
       } finally {
         setLoading(false);
       }
     },
-    [session?.user?.id]
+    [session?.user?.id, handleError]
   );
 
   // Initial load only
@@ -144,19 +144,15 @@ export default function BusesPage() {
 
     try {
       const response = await busService.createBus(formData)
-      if (response.success) {
+      if (response) {
         toast.success("Bus created successfully")
         setShowCreateForm(false)
         // Refetch buses to get updated list
         await fetchBuses(currentPage, searchTerm, filterType, false)
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Failed to save bus:", error)
-      const errorMessage = error?.response?.data?.message ||
-                          error?.response?.data?.error ||
-                          error?.message ||
-                          "Failed to create bus. Please try again."
-      toast.error(errorMessage)
+      handleError(error, "Failed to create bus. Please try again.")
     } finally {
       setSubmitting(false)
     }
@@ -181,13 +177,9 @@ export default function BusesPage() {
       setDeleteModal({ isOpen: false, bus: null, isDeleting: false })
       // Refetch buses to get updated list
       await fetchBuses(currentPage, searchTerm, filterType, false)
-    } catch (error: any) {
+    } catch (error) {
       console.error("Failed to delete bus:", error)
-      const errorMessage = error?.response?.data?.message ||
-                          error?.response?.data?.error ||
-                          error?.message ||
-                          "Failed to delete bus. Please try again."
-      toast.error(errorMessage)
+      handleError(error, "Failed to delete bus. Please try again.")
       setDeleteModal(prev => ({ ...prev, isDeleting: false }))
     }
   }
@@ -372,29 +364,15 @@ export default function BusesPage() {
 
       {/* Pagination */}
       {totalCount > 10 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-600">
-            Showing {((currentPage - 1) * 10) + 1} to {Math.min(currentPage * 10, totalCount)} of {totalCount} buses
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(prev => prev + 1)}
-              disabled={currentPage * 10 >= totalCount}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={Math.ceil(totalCount / 10)}
+          totalItems={totalCount}
+          itemsPerPage={10}
+          onPageChange={handlePageChange}
+          showingStart={(currentPage - 1) * 10 + 1}
+          showingEnd={Math.min(currentPage * 10, totalCount)}
+        />
       )}
 
       {/* Delete Confirmation Modal */}

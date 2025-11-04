@@ -4,12 +4,14 @@ import { useState, useEffect, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { Plus, Trash2, Edit, Eye, Users } from "lucide-react"
 import toast from "react-hot-toast"
+import { useApiError } from "@/hooks/use-api-error"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table"
 import { SearchFilter, ConfirmationModal } from "@/components/widgets/common"
+import { Pagination } from "@/components/ui/pagination"
 import { tripService } from "@/services/trips"
 import { routeService } from "@/services/routes"
 import { busService } from "@/services/bus"
@@ -24,13 +26,14 @@ interface TripFormData {
   arrival_datetime: string
   price_per_seat: number
   available_seats: number
-  status: 'scheduled' | 'boarding' | 'departed' | 'cancelled' | 'completed'
+  status: 'scheduled' | 'boarding' | 'in_transit' | 'cancelled' | 'completed'
   pickup_points: { name: string; time: string }[]
   drop_points: { name: string; time: string }[]
 }
 
 export default function TripsPage() {
   const { data: session } = useSession()
+  const { handleError } = useApiError()
   const [trips, setTrips] = useState<Trip[]>([])
   const [routes, setRoutes] = useState<Route[]>([])
   const [buses, setBuses] = useState<Bus[]>([])
@@ -40,7 +43,8 @@ export default function TripsPage() {
   const [filterRoute, setFilterRoute] = useState("")
   const [filterOrigin, setFilterOrigin] = useState("")
   const [filterDestination, setFilterDestination] = useState("")
-  const [filterDepartureDate, setFilterDepartureDate] = useState("")
+  const [filterStartDate, setFilterStartDate] = useState("")
+  const [filterEndDate, setFilterEndDate] = useState("")
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null)
   const [viewingSeats, setViewingSeats] = useState<string | null>(null)
@@ -63,12 +67,13 @@ export default function TripsPage() {
       try {
         const [routesRes, busesRes] = await Promise.all([
           routeService.getRoutes(1),
-          busService.getBuses(1)
+          busService.getAvailableBuses()
         ])
         setRoutes(routesRes.results)
-        setBuses(busesRes.results)
+        setBuses(busesRes)
       } catch (error) {
         console.error("Failed to fetch dropdown data:", error)
+        toast.error("Failed to load routes and buses")
       }
     }
 
@@ -78,7 +83,17 @@ export default function TripsPage() {
   }, [session?.user?.id])
 
   const fetchTrips = useCallback(
-    async (page: number, showToast: boolean = true) => {
+    async (
+      page: number,
+      search?: string,
+      status?: string,
+      route?: string,
+      origin?: string,
+      destination?: string,
+      startDate?: string,
+      endDate?: string,
+      showToast: boolean = true
+    ) => {
       if (!session?.user?.id) {
         if (showToast)
           toast.error("Authentication required. Please log in again.")
@@ -95,12 +110,13 @@ export default function TripsPage() {
 
         const filters = {
           page,
-          search: searchTerm || undefined,
-          status: filterStatus || undefined,
-          route: filterRoute || undefined,
-          origin: filterOrigin || undefined,
-          destination: filterDestination || undefined,
-          departure_date: filterDepartureDate || undefined,
+          search: search || undefined,
+          status: status || undefined,
+          route: route || undefined,
+          origin: origin || undefined,
+          destination: destination || undefined,
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
         }
 
         const response = await tripService.getTrips(filters)
@@ -109,7 +125,7 @@ export default function TripsPage() {
         setTotalCount(response.count)
 
         if (showToast && loadingToast) {
-          if (searchTerm || filterStatus || filterRoute || filterDepartureDate) {
+          if (search || status || route || startDate || endDate) {
             toast.success(
               `Found ${response.results.length} trips`,
               { id: loadingToast }
@@ -120,41 +136,39 @@ export default function TripsPage() {
             })
           }
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error("Error fetching trips:", err)
         if (showToast && loadingToast) {
-          const errorMessage = err?.response?.data?.message ||
-                              err?.response?.data?.error ||
-                              err?.message ||
-                              "Failed to load trips. Please try again."
-          toast.error(errorMessage, {
-            id: loadingToast,
-          })
+          toast.dismiss(loadingToast)
+        }
+        if (showToast) {
+          handleError(err, "Failed to load trips. Please try again.")
         }
       } finally {
         setLoading(false)
       }
     },
-    [session?.user?.id, searchTerm, filterStatus, filterRoute, filterOrigin, filterDestination, filterDepartureDate]
+    [session?.user?.id, handleError]
   )
 
   // Initial load only
   useEffect(() => {
     if (session?.user?.id && trips.length === 0) {
-      fetchTrips(1, false)
+      fetchTrips(1, "", "", "", "", "", "", "", false)
     }
-  }, [session?.user?.id, trips.length, fetchTrips])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.id, trips.length])
 
   // Page changes
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
-    fetchTrips(page, false)
+    fetchTrips(page, searchTerm, filterStatus, filterRoute, filterOrigin, filterDestination, filterStartDate, filterEndDate, false)
   }
 
   // Manual search
   const handleSearch = () => {
     setCurrentPage(1)
-    fetchTrips(1, true)
+    fetchTrips(1, searchTerm, filterStatus, filterRoute, filterOrigin, filterDestination, filterStartDate, filterEndDate, true)
   }
 
   // Reset search
@@ -164,7 +178,8 @@ export default function TripsPage() {
     setFilterRoute("")
     setFilterOrigin("")
     setFilterDestination("")
-    setFilterDepartureDate("")
+    setFilterStartDate("")
+    setFilterEndDate("")
     setCurrentPage(1)
 
     toast.success("🔄 Filters cleared - showing all trips", {
@@ -176,7 +191,7 @@ export default function TripsPage() {
       },
     })
 
-    fetchTrips(1, false)
+    fetchTrips(1, "", "", "", "", "", "", "", false)
   }
 
   const handleFormSubmit = async (formData: TripFormData) => {
@@ -194,15 +209,10 @@ export default function TripsPage() {
         setShowCreateForm(false)
       }
 
-      // Refresh the trips list
-      await fetchTrips(currentPage, false)
-    } catch (error: any) {
+      await fetchTrips(currentPage, searchTerm, filterStatus, filterRoute, filterOrigin, filterDestination, filterStartDate, filterEndDate, false)
+    } catch (error) {
       console.error("Failed to save trip:", error)
-      const errorMessage = error?.response?.data?.message ||
-                          error?.response?.data?.error ||
-                          error?.message ||
-                          `Failed to ${isEditing ? "update" : "create"} trip. Please try again.`
-      toast.error(errorMessage)
+      handleError(error, `Failed to ${isEditing ? "update" : "create"} trip. Please try again.`)
     } finally {
       setSubmitting(false)
     }
@@ -232,14 +242,10 @@ export default function TripsPage() {
       setDeleteModal({ isOpen: false, trip: null, isDeleting: false })
 
       // Refresh the trips list
-      await fetchTrips(currentPage, false)
-    } catch (error: any) {
+      await fetchTrips(currentPage, searchTerm, filterStatus, filterRoute, filterOrigin, filterDestination, filterStartDate, filterEndDate, false)
+    } catch (error) {
       console.error("Failed to delete trip:", error)
-      const errorMessage = error?.response?.data?.message ||
-                          error?.response?.data?.error ||
-                          error?.message ||
-                          "Failed to delete trip. Please try again."
-      toast.error(errorMessage)
+      handleError(error, "Failed to delete trip. Please try again.")
       setDeleteModal(prev => ({ ...prev, isDeleting: false }))
     }
   }
@@ -297,53 +303,70 @@ export default function TripsPage() {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Trips</p>
-                <p className="text-2xl font-bold">{totalCount}</p>
-              </div>
-              <Users className="w-8 h-8 text-gray-400" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Total Trips
+            </CardTitle>
+            <Users className="w-4 h-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-gray-900">
+              {totalCount}
             </div>
+            <p className="text-xs text-green-600 mt-1">
+              +10% from last month
+            </p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Scheduled</p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {scheduledTrips}
-                </p>
-              </div>
-              <Users className="w-8 h-8 text-blue-400" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Scheduled
+            </CardTitle>
+            <Users className="w-4 h-4 text-orange-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-gray-900">
+              {scheduledTrips}
             </div>
+            <p className="text-xs text-gray-500 mt-1">
+              {totalCount > 0 ? Math.round((scheduledTrips / totalCount) * 100) : 0}%
+              of total trips
+            </p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Active</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {activeTrips}
-                </p>
-              </div>
-              <Users className="w-8 h-8 text-green-400" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Active
+            </CardTitle>
+            <Users className="w-4 h-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-gray-900">
+              {activeTrips}
             </div>
+            <p className="text-xs text-gray-500 mt-1">
+              {totalCount > 0 ? Math.round((activeTrips / totalCount) * 100) : 0}%
+              of total trips
+            </p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Completed</p>
-                <p className="text-2xl font-bold text-purple-600">
-                  {completedTrips}
-                </p>
-              </div>
-              <Users className="w-8 h-8 text-purple-400" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Completed
+            </CardTitle>
+            <Users className="w-4 h-4 text-purple-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-gray-900">
+              {completedTrips}
             </div>
+            <p className="text-xs text-gray-500 mt-1">
+              {totalCount > 0 ? Math.round((completedTrips / totalCount) * 100) : 0}%
+              of total trips
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -351,102 +374,145 @@ export default function TripsPage() {
       {/* Search & Filters */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex flex-col gap-4">
+          <div className="space-y-4">
             {/* Search Bar */}
-            <SearchFilter
-              searchTerm={searchTerm}
-              onSearchTermChange={setSearchTerm}
-              onSearch={handleSearch}
-              onReset={handleReset}
-              placeholder="Search trips..."
-            />
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1">
+                <Input
+                  type="text"
+                  placeholder="Search trips by route, bus, or location..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleSearch()
+                    }
+                  }}
+                  className="h-10"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleSearch} className="h-10">
+                  Search
+                </Button>
+                <Button onClick={handleReset} variant="outline" className="h-10">
+                  Reset
+                </Button>
+              </div>
+            </div>
 
             {/* Filter Controls */}
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">Status</label>
-                <select
-                  value={filterStatus}
-                  onChange={(e) => {
-                    setFilterStatus(e.target.value)
-                    setCurrentPage(1)
-                    fetchTrips(1, true)
-                  }}
-                  className="w-full px-3 py-2 border rounded-md bg-background"
-                >
-                  <option value="">All Status</option>
-                  <option value="scheduled">Scheduled</option>
-                  <option value="boarding">Boarding</option>
-                  <option value="in_transit">In Transit</option>
-                  <option value="cancelled">Cancelled</option>
-                  <option value="completed">Completed</option>
-                </select>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <span className="font-medium">Filters:</span>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Route</label>
-                <select
-                  value={filterRoute}
-                  onChange={(e) => {
-                    setFilterRoute(e.target.value)
-                    setCurrentPage(1)
-                    fetchTrips(1, true)
-                  }}
-                  className="w-full px-3 py-2 border rounded-md bg-background"
-                >
-                  <option value="">All Routes</option>
-                  {routes.map(route => (
-                    <option key={route.id} value={route.id}>
-                      {route.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Origin</label>
-                <Input
-                  type="text"
-                  value={filterOrigin}
-                  onChange={(e) => setFilterOrigin(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Status</label>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => {
+                      const newStatus = e.target.value
+                      setFilterStatus(newStatus)
                       setCurrentPage(1)
-                      fetchTrips(1, true)
-                    }
-                  }}
-                  placeholder="e.g., Accra"
-                />
-              </div>
+                      fetchTrips(1, searchTerm, newStatus, filterRoute, filterOrigin, filterDestination, filterStartDate, filterEndDate, true)
+                    }}
+                    className="w-full h-9 px-3 py-1 text-sm border border-gray-300 rounded-lg bg-white hover:border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                  >
+                    <option value="">All Status</option>
+                    <option value="scheduled">Scheduled</option>
+                    <option value="boarding">Boarding</option>
+                    <option value="in_transit">In Transit</option>
+                    <option value="cancelled">Cancelled</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Destination</label>
-                <Input
-                  type="text"
-                  value={filterDestination}
-                  onChange={(e) => setFilterDestination(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Route</label>
+                  <select
+                    value={filterRoute}
+                    onChange={(e) => {
+                      const newRoute = e.target.value
+                      setFilterRoute(newRoute)
                       setCurrentPage(1)
-                      fetchTrips(1, true)
-                    }
-                  }}
-                  placeholder="e.g., Kumasi"
-                />
-              </div>
+                      fetchTrips(1, searchTerm, filterStatus, newRoute, filterOrigin, filterDestination, filterStartDate, filterEndDate, true)
+                    }}
+                    className="w-full h-9 px-3 py-1 text-sm border border-gray-300 rounded-lg bg-white hover:border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                  >
+                    <option value="">All Routes</option>
+                    {routes?.map(route => (
+                      <option key={route.id} value={route.id}>
+                        {route.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Departure Date</label>
-                <input
-                  type="date"
-                  value={filterDepartureDate}
-                  onChange={(e) => {
-                    setFilterDepartureDate(e.target.value)
-                    setCurrentPage(1)
-                    fetchTrips(1, true)
-                  }}
-                  className="w-full px-3 py-2 border rounded-md bg-background"
-                />
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Origin</label>
+                  <Input
+                    type="text"
+                    value={filterOrigin}
+                    onChange={(e) => setFilterOrigin(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        setCurrentPage(1)
+                        fetchTrips(1, searchTerm, filterStatus, filterRoute, filterOrigin, filterDestination, filterStartDate, filterEndDate, true)
+                      }
+                    }}
+                    placeholder="e.g., Accra"
+                    className="h-9 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Destination</label>
+                  <Input
+                    type="text"
+                    value={filterDestination}
+                    onChange={(e) => setFilterDestination(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        setCurrentPage(1)
+                        fetchTrips(1, searchTerm, filterStatus, filterRoute, filterOrigin, filterDestination, filterStartDate, filterEndDate, true)
+                      }
+                    }}
+                    placeholder="e.g., Kumasi"
+                    className="h-9 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Start Date</label>
+                  <input
+                    type="date"
+                    value={filterStartDate}
+                    onChange={(e) => {
+                      const newDate = e.target.value
+                      setFilterStartDate(newDate)
+                      setCurrentPage(1)
+                      fetchTrips(1, searchTerm, filterStatus, filterRoute, filterOrigin, filterDestination, newDate, filterEndDate, true)
+                    }}
+                    className="w-full h-9 px-3 py-1 text-sm border border-gray-300 rounded-lg bg-white hover:border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">End Date</label>
+                  <input
+                    type="date"
+                    value={filterEndDate}
+                    onChange={(e) => {
+                      const newDate = e.target.value
+                      setFilterEndDate(newDate)
+                      setCurrentPage(1)
+                      fetchTrips(1, searchTerm, filterStatus, filterRoute, filterOrigin, filterDestination, filterStartDate, newDate, true)
+                    }}
+                    className="w-full h-9 px-3 py-1 text-sm border border-gray-300 rounded-lg bg-white hover:border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -577,29 +643,15 @@ export default function TripsPage() {
 
       {/* Pagination */}
       {totalCount > 10 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-600">
-            Showing {((currentPage - 1) * 10) + 1} to {Math.min(currentPage * 10, totalCount)} of {totalCount} trips
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage * 10 >= totalCount}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={Math.ceil(totalCount / 10)}
+          totalItems={totalCount}
+          itemsPerPage={10}
+          onPageChange={handlePageChange}
+          showingStart={(currentPage - 1) * 10 + 1}
+          showingEnd={Math.min(currentPage * 10, totalCount)}
+        />
       )}
 
       {/* Delete Confirmation Modal */}

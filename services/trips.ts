@@ -7,7 +7,8 @@ interface TripFilters {
   route?: string
   origin?: string
   destination?: string
-  departure_date?: string
+  start_date?: string
+  end_date?: string
   search?: string
 }
 
@@ -27,8 +28,11 @@ export const tripService = {
     if (filters?.destination) {
       endpoint += `&destination=${encodeURIComponent(filters.destination)}`
     }
-    if (filters?.departure_date) {
-      endpoint += `&departure_date=${encodeURIComponent(filters.departure_date)}`
+    if (filters?.start_date) {
+      endpoint += `&start_date=${encodeURIComponent(filters.start_date)}`
+    }
+    if (filters?.end_date) {
+      endpoint += `&end_date=${encodeURIComponent(filters.end_date)}`
     }
     if (filters?.search) {
       endpoint += `&search=${encodeURIComponent(filters.search)}`

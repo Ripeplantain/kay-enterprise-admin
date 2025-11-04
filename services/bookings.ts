@@ -1,10 +1,12 @@
 import apiInstance from "@/lib/api"
-import { BookingsResponse, Booking, BookingCreateData, BookingUpdateData } from "@/lib/types"
+import { BookingsResponse, Booking, BookingCreateData, BookingUpdateData, BookingStats } from "@/lib/types"
 
 interface BookingFilters {
   page?: number
   search?: string
   status?: string
+  start_date?: string
+  end_date?: string
 }
 
 export const bookingService = {
@@ -17,6 +19,12 @@ export const bookingService = {
     }
     if (filters?.status) {
       endpoint += `&status=${encodeURIComponent(filters.status)}`
+    }
+    if (filters?.start_date) {
+      endpoint += `&start_date=${filters.start_date}`
+    }
+    if (filters?.end_date) {
+      endpoint += `&end_date=${filters.end_date}`
     }
 
     const response = await apiInstance.get(endpoint)
@@ -53,9 +61,22 @@ export const bookingService = {
     return response.data
   },
 
-  // Delete booking permanently
-  deleteBooking: async (id: string): Promise<{ success: boolean; message: string }> => {
-    const response = await apiInstance.delete(`booking/bookings/${id}/`)
+
+
+  getBookingStats: async (filters?: { start_date?: string, end_date?: string }): Promise<BookingStats> => {
+    let endpoint = `booking/bookings/stats/`
+    const params = new URLSearchParams()
+    if (filters?.start_date) {
+      params.append('start_date', filters.start_date)
+    }
+    if (filters?.end_date) {
+      params.append('end_date', filters.end_date)
+    }
+    const queryString = params.toString()
+    if (queryString) {
+      endpoint += `?${queryString}`
+    }
+    const response = await apiInstance.get(endpoint)
     return response.data
-  }
+  },
 }

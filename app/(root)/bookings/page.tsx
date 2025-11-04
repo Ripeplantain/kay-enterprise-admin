@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import toast from "react-hot-toast"
+import { useApiError } from "@/hooks/use-api-error"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -10,7 +11,6 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@
 import {
   TicketCheck,
   Plus,
-  MapPin,
   Calendar,
   Clock,
   User,
@@ -22,17 +22,22 @@ import {
 } from "lucide-react"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Loader } from "@/components/ui/loader"
-import { SearchFilter, ConfirmationModal } from "@/components/widgets/common"
+import { SearchFilter, ConfirmationModal, DateRangeFilter } from "@/components/widgets/common"
 import { bookingService } from "@/services/bookings"
-import { Booking, BookingCreateData } from "@/lib/types"
+import { Booking, BookingCreateData, BookingStats } from "@/lib/types"
 import BookingForm from "@/components/bookings/booking-form"
+import BookingDetailsModal from "@/components/bookings/booking-details-modal"
 
 export default function BookingsList() {
+  const { handleError } = useApiError()
   const { data: session, status } = useSession()
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("")
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
+  const [stats, setStats] = useState<BookingStats | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -49,15 +54,15 @@ export default function BookingsList() {
     isCancelling: false
   })
 
-  const [deleteModal, setDeleteModal] = useState<{
+  const [detailsModal, setDetailsModal] = useState<{
     isOpen: boolean
     booking: Booking | null
-    isDeleting: boolean
   }>({
     isOpen: false,
-    booking: null,
-    isDeleting: false
+    booking: null
   })
+
+
 
   const fetchBookings = useCallback(
     async (page: number, showToast: boolean = true) => {
@@ -79,6 +84,8 @@ export default function BookingsList() {
           page,
           search: searchTerm || undefined,
           status: statusFilter || undefined,
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
         }
 
         const response = await bookingService.getBookings(filters)
@@ -99,32 +106,46 @@ export default function BookingsList() {
           }
         }
       } catch (err: any) {
-        console.error("Error fetching bookings:", err)
-        if (showToast && loadingToast) {
-          const errorMessage = err?.response?.data?.message ||
-                              err?.response?.data?.error ||
-                              err?.message ||
-                              "Failed to load bookings. Please try again."
-          toast.error(errorMessage, {
-            id: loadingToast,
-          })
+        if (loadingToast) {
+          toast.dismiss(loadingToast)
         }
+        handleError(err, "Failed to load bookings. Please try again.")
       } finally {
         setLoading(false)
       }
     },
-    [session?.user?.id, searchTerm, statusFilter]
+    [session?.user?.id, searchTerm, statusFilter, startDate, endDate, handleError]
   )
 
-  // Initial load only
+  const fetchBookingStats = useCallback(async () => {
+    if (!session?.user?.id) {
+      return
+    }
+    try {
+      const filters = {
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+      }
+      const statsData = await bookingService.getBookingStats(filters)
+      setStats(statsData)
+    } catch (error) {
+      handleError(error, "Failed to load booking statistics.")
+    }
+  }, [session?.user?.id, startDate, endDate, handleError])
+
+  // Initial load and reset
   useEffect(() => {
     if (status === "loading") return
     if (status === "unauthenticated") return
 
-    if (status === "authenticated" && session?.user?.id && bookings.length === 0) {
-      fetchBookings(1, false)
+    if (status === "authenticated" && session?.user?.id) {
+      if (searchTerm === "" && statusFilter === "" && startDate === "" && endDate === "") {
+        fetchBookings(1, false)
+        fetchBookingStats()
+      }
     }
-  }, [status, session?.user?.id, bookings.length, fetchBookings])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, session?.user?.id, searchTerm, statusFilter, startDate, endDate])
 
   // Page changes
   const handlePageChange = (page: number) => {
@@ -132,40 +153,29 @@ export default function BookingsList() {
     fetchBookings(page, false)
   }
 
-  // Manual search
-  const handleSearch = () => {
+  const handleApplyFilters = useCallback(() => {
     setCurrentPage(1)
     fetchBookings(1, true)
-  }
-
-  // Handle filter change
-  const handleFilterChange = (newStatus: string) => {
-    setStatusFilter(newStatus)
-    setCurrentPage(1)
-  }
+    fetchBookingStats()
+  }, [fetchBookings, fetchBookingStats])
 
   useEffect(() => {
-    if (statusFilter !== "") {
-      fetchBookings(1, true)
+    if (statusFilter) {
+      handleApplyFilters()
     }
-  }, [statusFilter, fetchBookings])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter]);
+
+
+
 
   // Reset search
   const handleReset = () => {
     setSearchTerm("")
     setStatusFilter("")
+    setStartDate("")
+    setEndDate("")
     setCurrentPage(1)
-
-    toast.success("🔄 Search cleared - showing all bookings", {
-      duration: 3000,
-      style: {
-        background: "#f3f4f6",
-        color: "#374151",
-        border: "1px solid #d1d5db",
-      },
-    })
-
-    fetchBookings(1, false)
   }
 
   const handleFormSubmit = async (formData: BookingCreateData) => {
@@ -185,13 +195,8 @@ export default function BookingsList() {
       setShowCreateForm(false)
       // Refresh the bookings list
       await fetchBookings(currentPage, false)
-    } catch (error: any) {
-      console.error("Failed to save booking:", error)
-      const errorMessage = error?.response?.data?.message ||
-                          error?.response?.data?.error ||
-                          error?.message ||
-                          `Failed to ${isEditing ? "update" : "create"} booking. Please try again.`
-      toast.error(errorMessage)
+    } catch (error) {
+      handleError(error, `Failed to ${isEditing ? "update" : "create"} booking. Please try again.`)
     } finally {
       setSubmitting(false)
     }
@@ -217,13 +222,8 @@ export default function BookingsList() {
 
       // Refresh the bookings list
       await fetchBookings(currentPage, false)
-    } catch (error: any) {
-      console.error("Failed to cancel booking:", error)
-      const errorMessage = error?.response?.data?.message ||
-                          error?.response?.data?.error ||
-                          error?.message ||
-                          "Failed to cancel booking. Please try again."
-      toast.error(errorMessage)
+    } catch (error) {
+      handleError(error, "Failed to cancel booking. Please try again.")
       setCancelModal(prev => ({ ...prev, isCancelling: false }))
     }
   }
@@ -234,42 +234,18 @@ export default function BookingsList() {
     }
   }
 
-  const handleDeleteClick = (booking: Booking) => {
-    setDeleteModal({
+  const handleViewDetailsClick = (booking: Booking) => {
+    setDetailsModal({
       isOpen: true,
-      booking,
-      isDeleting: false
+      booking
     })
   }
 
-  const handleDeleteConfirm = async () => {
-    if (!deleteModal.booking) return
-
-    setDeleteModal(prev => ({ ...prev, isDeleting: true }))
-
-    try {
-      await bookingService.deleteBooking(deleteModal.booking.id)
-      toast.success(`Booking ${deleteModal.booking.reference_id} deleted successfully`)
-      setDeleteModal({ isOpen: false, booking: null, isDeleting: false })
-
-      // Refresh the bookings list
-      await fetchBookings(currentPage, false)
-    } catch (error: any) {
-      console.error("Failed to delete booking:", error)
-      const errorMessage = error?.response?.data?.message ||
-                          error?.response?.data?.error ||
-                          error?.message ||
-                          "Failed to delete booking. Please try again."
-      toast.error(errorMessage)
-      setDeleteModal(prev => ({ ...prev, isDeleting: false }))
-    }
+  const handleDetailsClose = () => {
+    setDetailsModal({ isOpen: false, booking: null })
   }
 
-  const handleDeleteClose = () => {
-    if (!deleteModal.isDeleting) {
-      setDeleteModal({ isOpen: false, booking: null, isDeleting: false })
-    }
-  }
+
 
   const startEdit = (booking: Booking) => {
     setEditingBooking(booking)
@@ -290,12 +266,7 @@ export default function BookingsList() {
     }
   }
 
-  const totalBookings = totalCount
-  const confirmedBookings = bookings?.filter(b => b.status === "confirmed").length || 0
-  const pendingBookings = bookings?.filter(b => b.status === "pending").length || 0
-  const totalRevenue = bookings?.reduce((sum, b) => sum + parseFloat(b.total_amount), 0) || 0
-
-  const bookingStatuses = ["confirmed", "pending", "cancelled"]
+  const bookingStatuses = ["confirmed", "pending", "cancelled", "completed"]
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -312,10 +283,6 @@ export default function BookingsList() {
               <Download className="w-4 h-4" />
               <span className="hidden sm:inline">Export</span>
             </Button>
-            <Button onClick={() => setShowCreateForm(true)} className="flex items-center gap-2 justify-center">
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">New Booking</span>
-            </Button>
           </div>
         </div>
       </div>
@@ -330,7 +297,7 @@ export default function BookingsList() {
             <TicketCheck className="w-4 h-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-gray-900">{totalBookings}</div>
+            <div className="text-2xl font-bold text-gray-900">{stats?.total_bookings ?? '...'}</div>
           </CardContent>
         </Card>
 
@@ -342,7 +309,7 @@ export default function BookingsList() {
             <TicketCheck className="w-4 h-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-gray-900">{confirmedBookings}</div>
+            <div className="text-2xl font-bold text-gray-900">{stats?.confirmed_bookings ?? '...'}</div>
           </CardContent>
         </Card>
 
@@ -354,7 +321,7 @@ export default function BookingsList() {
             <Clock className="w-4 h-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-gray-900">{pendingBookings}</div>
+            <div className="text-2xl font-bold text-gray-900">{stats?.pending_bookings ?? '...'}</div>
           </CardContent>
         </Card>
 
@@ -366,35 +333,44 @@ export default function BookingsList() {
             <CreditCard className="w-4 h-4 text-purple-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-gray-900">GHS {totalRevenue.toFixed(2)}</div>
+            <div className="text-2xl font-bold text-gray-900">GHS {stats?.total_revenue?.toFixed(2) ?? '...'}</div>
           </CardContent>
         </Card>
       </div>
 
       {/* Search & Filters */}
-      <SearchFilter
-        searchTerm={searchTerm}
-        onSearchTermChange={setSearchTerm}
-        onSearch={handleSearch}
-        onReset={handleReset}
-        placeholder="Search by booking ID, customer name, or route..."
-        filterPosition="after"
-        filterComponent={
+      <div className="flex flex-col gap-4">
+        <SearchFilter
+          searchTerm={searchTerm}
+          onSearchTermChange={setSearchTerm}
+          onSearch={handleApplyFilters}
+          onReset={handleReset}
+          placeholder="Search by booking ID, customer name, or route..."
+        />
+        <div className="flex flex-col sm:flex-row items-center gap-2">
+          <DateRangeFilter
+            startDate={startDate}
+            endDate={endDate}
+            onStartDateChange={setStartDate}
+            onEndDateChange={setEndDate}
+            onApply={handleApplyFilters}
+            onClear={handleReset}
+          />
           <select
             value={statusFilter}
-            onChange={(e) => handleFilterChange(e.target.value)}
-            className="px-3 py-2 border rounded-md bg-background"
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-3 py-2 border rounded-md bg-background h-10"
           >
             <option value="">All Status</option>
             {bookingStatuses.map(status => (
               <option key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1)}</option>
             ))}
           </select>
-        }
-      />
+        </div>
+      </div>
 
       {/* Bookings Table */}
-      <Card>
+      <Card className="mt-4">
         <CardHeader>
           <CardTitle>All Bookings</CardTitle>
         </CardHeader>
@@ -429,37 +405,37 @@ export default function BookingsList() {
                 <TableBody>
                   {bookings.map((booking) => (
                     <TableRow key={booking.id}>
-                      <TableCell className="font-medium">{booking.reference_id}</TableCell>
+                      <TableCell className="font-medium">{booking.booking_reference}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <User className="w-4 h-4 text-gray-400" />
-                          {booking.user_details.full_name}
+                          {booking.agent_name || booking.user_details?.full_name || 'N/A'}
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
-                          <span className="font-medium">{booking.route_name}</span>
+                          <span className="font-medium">{booking.trip_details.route_name}</span>
                           <span className="text-xs text-gray-500">
-                            {booking.departure_terminal} → {booking.destination_terminal}
+                            {booking.trip_details.origin} → {booking.trip_details.destination}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
                           <Calendar className="w-3 h-3 text-gray-400" />
-                          {new Date(booking.travel_date).toLocaleDateString()}
+                          {new Date(booking.trip_details.departure_datetime).toLocaleDateString()}
                         </div>
                       </TableCell>
                       <TableCell>{booking.seat_number}</TableCell>
                       <TableCell className="font-semibold">GHS {booking.total_amount}</TableCell>
                       <TableCell>
                         <Badge variant={getStatusColor(booking.status)}>
-                          {booking.status_display}
+                          {booking.status}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
-                          <Button variant="ghost" size="sm" title="View Details">
+                          <Button variant="ghost" size="sm" title="View Details" onClick={() => handleViewDetailsClick(booking)}>
                             <Eye className="w-4 h-4" />
                           </Button>
                           {booking.status !== "cancelled" && (
@@ -473,15 +449,7 @@ export default function BookingsList() {
                               <X className="w-4 h-4" />
                             </Button>
                           )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="Delete Booking"
-                            onClick={() => handleDeleteClick(booking)}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+
                         </div>
                       </TableCell>
                     </TableRow>
@@ -530,6 +498,12 @@ export default function BookingsList() {
         />
       )}
 
+      <BookingDetailsModal
+        isOpen={detailsModal.isOpen}
+        onClose={handleDetailsClose}
+        booking={detailsModal.booking}
+      />
+
       {/* Cancel Confirmation Modal */}
       <ConfirmationModal
         isOpen={cancelModal.isOpen}
@@ -547,22 +521,7 @@ export default function BookingsList() {
         isLoading={cancelModal.isCancelling}
       />
 
-      {/* Delete Confirmation Modal */}
-      <ConfirmationModal
-        isOpen={deleteModal.isOpen}
-        onClose={handleDeleteClose}
-        onConfirm={handleDeleteConfirm}
-        title="Delete Booking"
-        message={
-          deleteModal.booking
-            ? `Are you sure you want to permanently delete booking "${deleteModal.booking.reference_id}"? This action cannot be undone.`
-            : "Are you sure you want to delete this booking?"
-        }
-        confirmText="Delete Booking"
-        cancelText="Cancel"
-        variant="danger"
-        isLoading={deleteModal.isDeleting}
-      />
+
     </div>
   )
 }

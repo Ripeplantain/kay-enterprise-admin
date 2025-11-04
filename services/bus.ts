@@ -40,5 +40,10 @@ export const busService = {
   deleteBus: async (id: string): Promise<{ success: boolean; message: string }> => {
     const response = await apiInstance.delete(`booking/buses/${id}/`)
     return response.data
+  },
+
+  getAvailableBuses: async (): Promise<Bus[]> => {
+    const response = await apiInstance.get('booking/buses/available/')
+    return response.data
   }
 }

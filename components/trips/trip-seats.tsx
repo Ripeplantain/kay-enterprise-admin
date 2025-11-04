@@ -10,8 +10,8 @@ import { Seat } from "@/lib/types"
 import toast from "react-hot-toast"
 
 interface TripSeatsProps {
-  tripId: string
-  onClose: () => void
+  readonly tripId: string
+  readonly onClose: () => void
 }
 
 export default function TripSeats({ tripId, onClose }: TripSeatsProps) {

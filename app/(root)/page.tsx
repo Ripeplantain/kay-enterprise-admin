@@ -6,12 +6,13 @@ import { BarChart3, Users, Calendar, DollarSign } from "lucide-react"
 import toast from "react-hot-toast"
 import { StatCard } from "@/components/dashboard/stat-card"
 import { StatusCard } from "@/components/dashboard/status-card"
-import { clientService } from "@/services"
-import { StatsResponse } from "@/lib/types"
+import { clientService, agentService } from "@/services"
+import { StatsResponse, Agent } from "@/lib/types"
 
 export default function Dashboard() {
   const { data: session } = useSession()
   const [stats, setStats] = useState<StatsResponse['stats'] | null>(null)
+  const [agents, setAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -20,8 +21,13 @@ export default function Dashboard() {
       try {
         setLoading(true)
 
-        const response = await clientService.getStats()
-        setStats(response.stats)
+        const [clientResponse, agentResponse] = await Promise.all([
+          clientService.getStats(),
+          agentService.getAgents(1, undefined, undefined, undefined)
+        ])
+
+        setStats(clientResponse.stats)
+        setAgents(agentResponse.results)
       } catch (err) {
         const errorMessage = 'Failed to load dashboard statistics'
         setError(errorMessage)
@@ -63,6 +69,12 @@ export default function Dashboard() {
   }
 
   if (!stats) return null
+
+  // Calculate agent stats from agents array
+  const pendingCount = agents.filter(a => a.status === 'pending').length
+  const approvedCount = agents.filter(a => a.status === 'approved').length
+  const rejectedCount = agents.filter(a => a.status === 'rejected').length
+  const totalAgents = agents.length
 
   // Stats data from API
   const statsData = [
@@ -107,12 +119,12 @@ export default function Dashboard() {
     { status: "Cancelled", count: stats.bookings.cancelled, color: "bg-red-100 text-red-700" }
   ]
 
-  // Client status data
-  const clientStatus = [
-    { status: "Active", count: stats.clients.active, color: "bg-green-100 text-green-700" },
-    { status: "Verified", count: stats.clients.verified, color: "bg-blue-100 text-blue-700" },
-    { status: "Inactive", count: stats.clients.inactive, color: "bg-gray-100 text-gray-700" },
-    { status: "With Bookings", count: stats.clients.with_bookings, color: "bg-purple-100 text-purple-700" }
+  // Agent status data (calculated from agents array like in agents page)
+  const agentStatus = [
+    { status: "Approved", count: approvedCount, color: "bg-green-100 text-green-700" },
+    { status: "Pending", count: pendingCount, color: "bg-orange-100 text-orange-700" },
+    { status: "Rejected", count: rejectedCount, color: "bg-red-100 text-red-700" },
+    { status: "Total", count: totalAgents, color: "bg-blue-100 text-blue-700" }
   ]
 
   return (
@@ -142,8 +154,8 @@ export default function Dashboard() {
         />
 
         <StatusCard
-          title="Client Status"
-          items={clientStatus}
+          title="Agent Status"
+          items={agentStatus}
         />
       </div>
     </div>

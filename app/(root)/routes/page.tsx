@@ -4,14 +4,17 @@ import { useState, useEffect, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { Plus, Trash2, Edit, MapPin } from "lucide-react"
 import toast from "react-hot-toast"
+import { useApiError } from "@/hooks/use-api-error"
 import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table"
-import { SearchFilter, ConfirmationModal } from "@/components/widgets/common"
+import { Pagination } from "@/components/ui/pagination"
 import { routeService } from "@/services/routes"
 import { Route } from "@/lib/types"
 import RouteForm from "@/components/routes/route-form"
+import { ConfirmationModal } from "@/components/widgets/common/confirmation-modal"
+import { SearchFilter } from "@/components/widgets/common/search-filter"
 
 interface RouteFormData {
   name: string
@@ -24,6 +27,7 @@ interface RouteFormData {
 
 export default function RoutesPage() {
   const { data: session } = useSession()
+  const { handleError } = useApiError()
   const [routes, setRoutes] = useState<Route[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
@@ -78,22 +82,19 @@ export default function RoutesPage() {
             })
           }
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error("Error fetching routes:", err)
         if (showToast && loadingToast) {
-          const errorMessage = err?.response?.data?.message ||
-                              err?.response?.data?.error ||
-                              err?.message ||
-                              "Failed to load routes. Please try again."
-          toast.error(errorMessage, {
-            id: loadingToast,
-          })
+          toast.dismiss(loadingToast)
+        }
+        if (showToast) {
+          handleError(err, "Failed to load routes. Please try again.")
         }
       } finally {
         setLoading(false)
       }
     },
-    [session?.user?.id]
+    [session?.user?.id, handleError]
   )
 
   // Initial load only
@@ -149,13 +150,9 @@ export default function RoutesPage() {
 
       // Refresh the routes list
       await fetchRoutes(currentPage, searchTerm, false)
-    } catch (error: any) {
+    } catch (error) {
       console.error("Failed to save route:", error)
-      const errorMessage = error?.response?.data?.message ||
-                          error?.response?.data?.error ||
-                          error?.message ||
-                          `Failed to ${isEditing ? "update" : "create"} route. Please try again.`
-      toast.error(errorMessage)
+      handleError(error, `Failed to ${isEditing ? "update" : "create"} route. Please try again.`)
     } finally {
       setSubmitting(false)
     }
@@ -187,13 +184,9 @@ export default function RoutesPage() {
 
       // Refresh the routes list
       await fetchRoutes(currentPage, searchTerm, false)
-    } catch (error: any) {
+    } catch (error) {
       console.error("Failed to delete route:", error)
-      const errorMessage = error?.response?.data?.message ||
-                          error?.response?.data?.error ||
-                          error?.message ||
-                          "Failed to delete route. Please try again."
-      toast.error(errorMessage)
+      handleError(error, "Failed to delete route. Please try again.")
       setDeleteModal(prev => ({ ...prev, isDeleting: false }))
     }
   }
@@ -229,53 +222,71 @@ export default function RoutesPage() {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Routes</p>
-                <p className="text-2xl font-bold">{totalCount}</p>
-              </div>
-              <MapPin className="w-8 h-8 text-gray-400" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Total Routes
+            </CardTitle>
+            <MapPin className="w-4 h-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-gray-900">
+              {totalCount}
             </div>
+            <p className="text-xs text-green-600 mt-1">
+              +3 new routes this month
+            </p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Active Routes</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {activeRoutes}
-                </p>
-              </div>
-              <MapPin className="w-8 h-8 text-green-400" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Active Routes
+            </CardTitle>
+            <MapPin className="w-4 h-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-gray-900">
+              {activeRoutes}
             </div>
+            <p className="text-xs text-gray-500 mt-1">
+              {totalCount > 0 ? Math.round((activeRoutes / totalCount) * 100) : 0}%
+              of total routes
+            </p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Inactive Routes</p>
-                <p className="text-2xl font-bold text-red-600">
-                  {totalCount - activeRoutes}
-                </p>
-              </div>
-              <MapPin className="w-8 h-8 text-red-400" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Inactive Routes
+            </CardTitle>
+            <MapPin className="w-4 h-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-gray-900">
+              {totalCount - activeRoutes}
             </div>
+            <p className="text-xs text-gray-500 mt-1">
+              {totalCount > 0
+                ? Math.round(((totalCount - activeRoutes) / totalCount) * 100)
+                : 0}
+              % of total routes
+            </p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Distance</p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {totalDistance.toFixed(0)} km
-                </p>
-              </div>
-              <MapPin className="w-8 h-8 text-blue-400" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Total Distance
+            </CardTitle>
+            <MapPin className="w-4 h-4 text-purple-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-gray-900">
+              {totalDistance.toFixed(0)} km
             </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Across all routes
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -372,29 +383,15 @@ export default function RoutesPage() {
 
       {/* Pagination */}
       {totalCount > 10 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-600">
-            Showing {((currentPage - 1) * 10) + 1} to {Math.min(currentPage * 10, totalCount)} of {totalCount} routes
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage * 10 >= totalCount}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={Math.ceil(totalCount / 10)}
+          totalItems={totalCount}
+          itemsPerPage={10}
+          onPageChange={handlePageChange}
+          showingStart={(currentPage - 1) * 10 + 1}
+          showingEnd={Math.min(currentPage * 10, totalCount)}
+        />
       )}
 
       {/* Delete Confirmation Modal */}

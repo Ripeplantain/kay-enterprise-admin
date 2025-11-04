@@ -17,7 +17,8 @@ import {
   Luggage,
   TicketCheck,
   Menu,
-  X
+  X,
+  UserCheck
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -54,7 +55,7 @@ export default function CoreLayout({ children }: CoreLayoutProps) {
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/70 bg-opacity-50 z-40 lg:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
@@ -214,6 +215,22 @@ export default function CoreLayout({ children }: CoreLayoutProps) {
               >
                 <Luggage className="w-4 h-4" />
                 Luggage
+              </Link>
+            </li>
+
+            {/* Agent Management */}
+            <li>
+              <Link
+                href="/agents"
+                onClick={handleLinkClick}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                  isActive("/agents")
+                    ? "bg-blue-600 text-white"
+                    : "text-slate-300 hover:bg-slate-700 hover:text-white"
+                }`}
+              >
+                <UserCheck className="w-4 h-4" />
+                Agents
               </Link>
             </li>
           </ul>

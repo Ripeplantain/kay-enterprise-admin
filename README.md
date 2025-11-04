@@ -1,36 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Kay Enterprise Admin Dashboard
+
+This is the administration dashboard for Kay Enterprise, a bus transportation company. It provides a centralized interface for managing all aspects of the business operations.
+
+## Project Scope & Features
+
+This is a comprehensive admin panel designed to manage a bus transportation service. The key features include:
+
+*   **Dashboard:** A central hub displaying key statistics and recent activities.
+*   **Trip & Route Planning:** Define bus routes and schedule trips.
+*   **Fleet Management:** Add and manage the company's fleet of buses.
+*   **Client Management:** Keep track of customer information.
+*   **Agent Management:** Manage travel agents, including an approval/rejection workflow.
+*   **Luggage Tracking:** Manage and track passenger luggage.
+*   **Payment Monitoring:** Oversee and manage payments (future implementation).
+*   **Authentication:** Secure login for administrators.
+
+## Tech Stack
+
+*   **Framework:** [Next.js](https://nextjs.org/) (App Router)
+*   **Language:** [TypeScript](https://www.typescriptlang.org/)
+*   **Authentication:** [NextAuth.js](https://next-auth.js.org/)
+*   **Styling:** [Tailwind CSS](https://tailwindcss.com/)
+*   **UI Components:** [Shadcn UI](https://ui.shadcn.com/) (based on `components.json`)
 
 ## Getting Started
 
-First, run the development server:
+First, install the dependencies:
+
+```bash
+npm install
+```
+
+Then, run the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The project is organized using the Next.js App Router structure:
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+*   `app/(root)/`: Contains the main pages of the application, protected by authentication.
+*   `app/(auth)/`: Contains the public-facing authentication pages (e.g., login).
+*   `app/api/`: Handles API routes, including NextAuth.js authentication.
+*   `components/`: Contains reusable React components, organized by feature and UI elements.
+*   `services/`: Contains functions for interacting with backend APIs.
+*   `lib/`: Contains utility functions, type definitions, and validation logic.
+*   `hooks/`: Contains custom React hooks.

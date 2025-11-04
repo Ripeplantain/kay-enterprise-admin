@@ -105,32 +105,43 @@ export interface BusesResponse {
 }
 
 export interface Booking {
-  id: string
-  trip_id: string
-  user: string
-  user_details: {
-    phone_number: string
-    full_name: string
-    email: string
-    gender: "M" | "F"
-  }
-  status: "confirmed" | "pending" | "cancelled"
-  status_display: string
-  seat_number: string
-  travel_date: string
-  departure_terminal: string
-  destination_terminal: string
-  departure_time: string
-  arrival_time: string
-  plate_number: string
-  route_name: string
-  ticket_price: string
-  booking_fee: string
-  total_amount: string
-  reference_id: string
-  booking_date: string
-  created_at: string
-  updated_at: string
+  id: number;
+  booking_reference: string;
+  trip: number;
+  trip_details: {
+    id: number;
+    route_name: string;
+    origin: string;
+    destination: string;
+    bus_plate: string;
+    bus_type: string;
+    departure_datetime: string;
+    arrival_datetime: string;
+    price_per_seat: string;
+    available_seats: number;
+    status: string;
+    pickup_points: { name: string; time: string; }[];
+    drop_points: { name: string; time: string; }[];
+  };
+  seat: number;
+  seat_number: string;
+  pickup_point_id: string;
+  drop_point_id: string;
+  total_amount: string;
+  status: "confirmed" | "pending" | "cancelled" | "completed";
+  agent?: number;
+  agent_name?: string;
+  agent_reference?: string;
+  user?: string;
+  user_details?: {
+    phone_number: string;
+    full_name: string;
+    email: string;
+    gender: "M" | "F";
+  };
+  luggage_items?: any[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface BookingsResponse {
@@ -260,4 +271,145 @@ export interface TripSeatsResponse {
   message: string
   trip_id: number
   seats: Seat[]
+}
+
+export interface LuggageType {
+  id: number
+  name: string
+  max_weight_kg: number
+  price: number
+  is_active: boolean
+  created_at?: string
+  updated_at?: string
+}
+
+export interface LuggageTypesResponse {
+  count: number
+  next: string | null
+  previous: string | null
+  results: LuggageType[]
+}
+
+export interface LuggageTypeCreateData {
+  name: string
+  max_weight_kg: number
+  price: number
+  is_active: boolean
+}
+
+export interface LuggageTypeUpdateData {
+  name?: string
+  max_weight_kg?: number
+  price?: number
+  is_active?: boolean
+}
+
+export interface Agent {
+  id: number
+  reference_number: string
+  full_name: string
+  phone_number: string
+  email: string
+  id_type: string
+  id_number: string
+  region: string
+  city_town: string
+  area_suburb?: string
+  mobile_money_provider: string
+  mobile_money_number: string
+  availability: string
+  referral_code?: string
+  why_join: string
+  status: 'pending' | 'approved' | 'rejected'
+  commission_rate: string | number
+  total_bookings: number
+  total_earnings: string | number
+  pending_commission?: string | number
+  approved_by_name?: string
+  approved_at?: string
+  rejection_reason?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface AgentsResponse {
+  count: number
+  next: string | null
+  previous: string | null
+  results: Agent[]
+}
+
+export interface AgentRegistrationData {
+  full_name: string
+  phone_number: string
+  email: string
+  id_type: string
+  id_number: string
+  region: string
+  city_town: string
+  area_suburb?: string
+  mobile_money_provider: string
+  mobile_money_number: string
+  availability: string
+  referral_code?: string
+  why_join: string
+}
+
+export interface AgentApprovalData {
+  commission_rate?: number
+}
+
+export interface AgentRejectionData {
+  rejection_reason: string
+}
+
+export interface AgentBooking {
+  booking_reference: string
+  client_name: string
+  trip_route: string
+  total_amount: string | number
+  commission_amount: string | number
+  status: string
+  created_at: string
+}
+
+export interface AgentBookingsResponse {
+  count: number
+  next: string | null
+  previous: string | null
+  results: AgentBooking[]
+}
+
+export interface BookingStats {
+  total_bookings: number;
+  confirmed_bookings: number;
+  pending_bookings: number;
+  cancelled_bookings: number;
+  completed_bookings: number;
+  total_revenue: number;
+}
+
+export interface AgentStats {
+  agents: {
+    total: number
+    approved: number
+    pending: number
+    rejected: number
+  }
+  commissions: {
+    total: string | number
+    pending: string | number
+    paid: string | number
+  }
+  bookings: {
+    total_via_agents: number
+    total_revenue: string | number
+  }
+  top_agents: Array<{
+    id: number
+    reference_number: string
+    full_name: string
+    total_bookings: number
+    total_earnings: string | number
+  }>
 }

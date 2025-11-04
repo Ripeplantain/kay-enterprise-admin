@@ -14,7 +14,7 @@ interface TripFormData {
   arrival_datetime: string
   price_per_seat: number
   available_seats: number
-  status: 'scheduled' | 'boarding' | 'departed' | 'cancelled' | 'completed'
+  status: 'scheduled' | 'boarding' | 'in_transit' | 'cancelled' | 'completed'
   pickup_points: PickupPoint[]
   drop_points: DropPoint[]
 }
@@ -60,12 +60,26 @@ export default function TripForm({
 
   useEffect(() => {
     if (initialData) {
+      // Convert datetime strings to format required by datetime-local input (YYYY-MM-DDTHH:MM)
+      const formatDateTimeForInput = (datetime: string) => {
+        if (!datetime) return ""
+        const date = new Date(datetime)
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        const hours = String(date.getHours()).padStart(2, '0')
+        const minutes = String(date.getMinutes()).padStart(2, '0')
+        return `${year}-${month}-${day}T${hours}:${minutes}`
+      }
+
       setFormData({
-        route: initialData.route,
-        bus: initialData.bus,
-        departure_datetime: initialData.departure_datetime,
-        arrival_datetime: initialData.arrival_datetime,
-        price_per_seat: initialData.price_per_seat,
+        route: initialData.route || 0,
+        bus: initialData.bus || 0,
+        departure_datetime: formatDateTimeForInput(initialData.departure_datetime),
+        arrival_datetime: formatDateTimeForInput(initialData.arrival_datetime),
+        price_per_seat: typeof initialData.price_per_seat === 'string'
+          ? parseFloat(initialData.price_per_seat)
+          : initialData.price_per_seat,
         available_seats: initialData.available_seats,
         status: initialData.status,
         pickup_points: initialData.pickup_points.length > 0 ? initialData.pickup_points : [{ name: "", time: "" }],
@@ -73,6 +87,19 @@ export default function TripForm({
       })
     }
   }, [initialData])
+
+  // Auto-populate available_seats when bus is selected (only in create mode)
+  useEffect(() => {
+    if (formData.bus && buses && mode === "create") {
+      const selectedBus = buses.find(bus => bus.id === formData.bus)
+      if (selectedBus) {
+        setFormData(prev => ({
+          ...prev,
+          available_seats: selectedBus.total_seats
+        }))
+      }
+    }
+  }, [formData.bus, buses, mode])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -151,7 +178,7 @@ export default function TripForm({
                 required
               >
                 <option value="">Select Route</option>
-                {routes.map(route => (
+                {routes?.map(route => (
                   <option key={route.id} value={route.id}>
                     {route.name} ({route.origin} → {route.destination})
                   </option>
@@ -168,7 +195,7 @@ export default function TripForm({
                 required
               >
                 <option value="">Select Bus</option>
-                {buses.map(bus => (
+                {buses?.map(bus => (
                   <option key={bus.id} value={bus.id}>
                     {bus.plate_number} ({bus.bus_type})
                   </option>
@@ -206,18 +233,6 @@ export default function TripForm({
                 onChange={(e) => setFormData(prev => ({ ...prev, price_per_seat: parseFloat(e.target.value) || 0 }))}
                 required
                 placeholder="e.g., 50.00"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Available Seats *</label>
-              <Input
-                type="number"
-                min="0"
-                value={formData.available_seats || ""}
-                onChange={(e) => setFormData(prev => ({ ...prev, available_seats: parseInt(e.target.value) || 0 }))}
-                required
-                placeholder="e.g., 40"
               />
             </div>
 
