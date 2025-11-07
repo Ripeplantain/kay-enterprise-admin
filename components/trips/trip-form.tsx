@@ -240,7 +240,7 @@ export default function TripForm({
               <label className="block text-sm font-medium mb-1">Status *</label>
               <select
                 value={formData.status}
-                onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as any }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as 'scheduled' | 'boarding' | 'in_transit' | 'cancelled' | 'completed' }))}
                 className="w-full px-3 py-2 border rounded-md bg-background"
                 required
               >

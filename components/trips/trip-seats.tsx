@@ -20,6 +20,7 @@ export default function TripSeats({ tripId, onClose }: TripSeatsProps) {
 
   useEffect(() => {
     fetchSeats()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId])
 
   const fetchSeats = async () => {
@@ -30,11 +31,12 @@ export default function TripSeats({ tripId, onClose }: TripSeatsProps) {
       const response = await tripService.getTripSeats(tripId)
       setSeats(response.seats || [])
       toast.success("Seats loaded successfully", { id: loadingToast })
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to fetch seats:", error)
-      const errorMessage = error?.response?.data?.message ||
-                          error?.response?.data?.error ||
-                          error?.message ||
+      const err = error as { response?: { data?: { message?: string; error?: string } }; message?: string }
+      const errorMessage = err?.response?.data?.message ||
+                          err?.response?.data?.error ||
+                          err?.message ||
                           "Failed to load seats"
       toast.error(errorMessage, { id: loadingToast })
     } finally {

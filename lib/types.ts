@@ -139,7 +139,12 @@ export interface Booking {
     email: string;
     gender: "M" | "F";
   };
-  luggage_items?: any[];
+  luggage_items?: Array<{
+    id: number;
+    luggage_type: string;
+    weight_kg: number;
+    price: string | number;
+  }>;
   created_at: string;
   updated_at: string;
 }

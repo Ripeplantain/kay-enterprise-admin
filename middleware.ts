@@ -1,32 +1,32 @@
-import { auth } from "@/auth"
+import { withAuth } from "next-auth/middleware"
+import { NextResponse } from "next/server"
 
-export default auth((req) => {
-  const { nextUrl } = req
-  const isLoggedIn = !!req.auth
+export default withAuth(
+  function middleware(req) {
+    const { nextUrl } = req
+    const isLoggedIn = !!req.nextauth.token
 
-  const isAuthPage = nextUrl.pathname.startsWith("/login")
-  const isProtectedRoute = nextUrl.pathname.startsWith("/") || 
-                          nextUrl.pathname === "/" ||
-                          nextUrl.pathname.startsWith("/admin")
+    const isAuthPage = nextUrl.pathname.startsWith("/login")
 
-  if (isAuthPage) {
-    if (isLoggedIn) {
-      return Response.redirect(new URL("/", nextUrl))
+    if (isAuthPage) {
+      if (isLoggedIn) {
+        return NextResponse.redirect(new URL("/", nextUrl))
+      }
+      return null
     }
+
+    if (!isLoggedIn) {
+      return NextResponse.redirect(new URL("/login", nextUrl))
+    }
+
     return null
+  },
+  {
+    callbacks: {
+      authorized: ({ token }) => !!token,
+    },
   }
-
-  if (isProtectedRoute && !isLoggedIn) {
-    return Response.redirect(new URL("/login", nextUrl))
-  }
-
-  // Redirect /dashboard to /dashboard (core route)
-  if (nextUrl.pathname === "/" && isLoggedIn) {
-    return null // Allow access to /dashboard
-  }
-
-  return null
-})
+)
 
 export const config = {
   matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],

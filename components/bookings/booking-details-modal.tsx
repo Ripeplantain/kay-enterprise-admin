@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Booking } from "@/lib/types"
-import { X, User, Calendar, Clock, Hash, Tag, Bus, MapPin, DollarSign } from "lucide-react"
+import { X, User, Calendar, Hash, Tag, Bus, DollarSign } from "lucide-react"
 
 interface BookingDetailsModalProps {
   isOpen: boolean
@@ -15,12 +15,12 @@ interface BookingDetailsModalProps {
 export default function BookingDetailsModal({ isOpen, onClose, booking }: BookingDetailsModalProps) {
   if (!isOpen || !booking) return null
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string): "default" | "destructive" | "outline" | "secondary" => {
     switch (status) {
       case "confirmed": return "default"
       case "pending": return "outline"
       case "cancelled": return "destructive"
-      case "completed": return "success"
+      case "completed": return "secondary"
       default: return "outline"
     }
   }

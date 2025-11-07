@@ -10,15 +10,13 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table"
 import {
   TicketCheck,
-  Plus,
   Calendar,
   Clock,
   User,
   CreditCard,
   Eye,
   Download,
-  X,
-  Trash2
+  X
 } from "lucide-react"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Loader } from "@/components/ui/loader"
@@ -105,7 +103,7 @@ export default function BookingsList() {
             })
           }
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (loadingToast) {
           toast.dismiss(loadingToast)
         }
@@ -184,7 +182,7 @@ export default function BookingsList() {
 
     try {
       if (isEditing) {
-        await bookingService.updateBooking(editingBooking.id, formData)
+        await bookingService.updateBooking(editingBooking.id.toString(), formData)
         toast.success("Booking updated successfully")
         setEditingBooking(null)
       } else {
@@ -216,8 +214,8 @@ export default function BookingsList() {
     setCancelModal(prev => ({ ...prev, isCancelling: true }))
 
     try {
-      await bookingService.cancelBooking(cancelModal.booking.id)
-      toast.success(`Booking ${cancelModal.booking.reference_id} cancelled successfully`)
+      await bookingService.cancelBooking(cancelModal.booking.id.toString())
+      toast.success(`Booking ${cancelModal.booking.booking_reference} cancelled successfully`)
       setCancelModal({ isOpen: false, booking: null, isCancelling: false })
 
       // Refresh the bookings list
@@ -246,11 +244,6 @@ export default function BookingsList() {
   }
 
 
-
-  const startEdit = (booking: Booking) => {
-    setEditingBooking(booking)
-    setShowCreateForm(true)
-  }
 
   const cancelForm = () => {
     setEditingBooking(null)
@@ -512,7 +505,7 @@ export default function BookingsList() {
         title="Cancel Booking"
         message={
           cancelModal.booking
-            ? `Are you sure you want to cancel booking "${cancelModal.booking.reference_id}"? This action cannot be undone and may affect the customer's travel plans.`
+            ? `Are you sure you want to cancel booking "${cancelModal.booking.booking_reference}"? This action cannot be undone and may affect the customer's travel plans.`
             : "Are you sure you want to cancel this booking?"
         }
         confirmText="Cancel Booking"

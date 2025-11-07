@@ -17,7 +17,6 @@ export function Pagination({
   currentPage,
   totalPages,
   totalItems,
-  itemsPerPage,
   onPageChange,
   showingStart,
   showingEnd,
